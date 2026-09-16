@@ -2,8 +2,9 @@ package co.wethinkcode.logisticsconnect;
 
 import io.javalin.Javalin;
 import com.opencsv.*;
-import java.io.FileReader;
+import com.opencsv.exceptions.*;
 import java.util.*;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 
 public class IngestionServiceApp {
@@ -22,23 +23,19 @@ public class IngestionServiceApp {
     );
 
 
-    private static List<Map<String,Object>> cleanCsv(String path){
+    private static List<Map<String,Object>> cleanCsv(String path) throws IOException, CsvException{
         List<String[]> rawRecords;
 
-        try(InputStream in = IngestionService.class.getResourceAsStream(resourcePath));
-
-        CVSReader csvReader = new CSVReader(new InputStreamReader(in,StandardCharsets.UFT_8)){
+        try (InputStream in = IngestionServiceApp.class.getResourceAsStream(path);
+        CSVReader csvReader = new CSVReader(new InputStreamReader(in,StandardCharsets.UTF_8))){
             List<String[]> allRows = csvReader.readAll();
-
-            rawRecords = allRows.subList(1,allRows.size());
+            rawRecords = allRows.subList(1, allRows.size());
         }
 
-        // Built first so rows with a blank province (H-508) can borrow one
-        // from another row that shares the same sorting_center.
-        Map<String, String> sortingCenterToProvince = buildProvinceLookup(rawRows);
+        Map<String, String> sortingCenterToProvince = buildProvinceLookup(rawRecords);
 
         List<Map<String, Object>> cleaned = new ArrayList<>();
-        for (String[] row : rawRows) {
+        for (String[] row : rawRecords) {
             String hubId = normalizeHubId(row[0]);
             String sortingCenter = normalizeSortingCenter(row[2]);
             String province = normalizeProvince(row[1], sortingCenter, sortingCenterToProvince);
@@ -77,7 +74,7 @@ public class IngestionServiceApp {
             String rawProvince = row[1].trim();
             if (rawProvince.isEmpty()) continue;
 
-            String canonicalProvince = CANONICAL_PROVINCES.get(rawProvince.toLowerCase());
+            String canonicalProvince = PROVINCES.get(rawProvince.toLowerCase());
             String sortingCenter = normalizeSortingCenter(row[2]);
             if (canonicalProvince != null) {
                 lookup.put(sortingCenter, canonicalProvince);
@@ -93,7 +90,7 @@ public class IngestionServiceApp {
             // Missing province (e.g. H-508) — infer from another row with the same sorting center.
             return sortingCenterToProvince.get(normalizedSortingCenter);
         }
-        return CANONICAL_PROVINCES.getOrDefault(trimmed.toLowerCase(), trimmed);
+        return PROVINCES.getOrDefault(trimmed.toLowerCase(), trimmed);
     }
 
     private static Boolean normalizeActive(String raw) {
@@ -142,11 +139,11 @@ public class IngestionServiceApp {
         return result;
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException, CsvException{
         Javalin app = Javalin.create().start(7050);
-        List<Map<String, Object>> hubs = cleanCsv(/hubs-global.csv);
+        List<Map<String, Object>> hubs = cleanCsv("/hubs-global.csv");
 
         app.get("/health", ctx -> ctx.result("OK"));
-        app.get("/hubs"), ctx -> ctx.json(hubs));
+        app.get("/hubs", ctx -> ctx.json(hubs));
     }
 }
