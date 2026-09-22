@@ -1,17 +1,19 @@
 package co.wethinkcode.logisticsconnect;
 
 import io.javalin.Javalin;
-import co.wethinkcode.logisticsconnect.mq.MqCinfig;
+import co.wethinkcode.logisticsconnect.mq.MqConfig;
 import org.apache.activemq.ActiveMQConnectionFactory;
-import javax.jms;
+import javax.jms.*;
 import java.time.Instant;
+import java.util.*;
 
 public class DelayStageServiceApp {
     private static Session mqSession;
     private static MessageProducer producer;
+    private static Map<String,Integer> hubStages = new ConcurrentHashMap<>();
 
-    private static void createMq() throws JMSExcepton{
-        ConnectionFactory factory = new ActiveMQConnectionFactory(MqConfid.BROKER_URL);
+    private static void createMq() throws JMSException{
+        ConnectionFactory factory = new ActiveMQConnectionFactory(MqConfig.BROKER_URL);
         Connection connection = factory.createConnection();
         connection.start();
 
@@ -23,7 +25,7 @@ public class DelayStageServiceApp {
     private static void publishStage(String hubId, int stageNo) throws JMSException{
         String json = String.format(
                 "{\"hubId\":\"%s\",\"stage\":%d,\"timestamp\":\"%s\"}",
-                hubId, stageNo, Instant.now().ttoString()
+                hubId, stageNo, Instant.now().toString()
         );
 
         TextMessage message = mqSession.createTextMessage(json);
@@ -35,14 +37,32 @@ public class DelayStageServiceApp {
         Javalin app = Javalin.create().start(7052);
 
         app.get("/health", ctx -> ctx.result("OK"));
-        app.get("/delay-stage/{hubId}" , ctx -> ctx.json(hub));
+        app.get("/delay-stage/{hubId}" , ctx -> {
+            String id = ctx.pathParam("hubId");
+            Integer stage = hubStages.get(id);
+
+            if(stage== null){
+                ctx.status(404);
+            }
+            else{
+                Map<String,Object> response = new LinkedHashMap<>();
+                response.put("hubId", id);
+                response.put("stage",stage);
+
+                ctx.json(response);
+            }
+        });
         app.post("/delay-stage/{hubId}" , ctx -> {
+            String id= ctx.pathParam("hubId");
 
-        };
+            Map<String, Object> body = ctx.bodyAsClass(Map.class);
+            int stage = (Integer) body.get("stage");
 
-        // TODO (Tracks the Transit Delay Stage (0-8, e.g. weather shutdowns).)
-        // Add domain endpoints for delay-stage-service here.
+            hubStages.put(id,stage);
+
+            publishStage(id,stage);
+
+            ctx.status(200);
+        });
     }
 }
-
-// MQ TODO: publishes to ActiveMQ topic MqConfig.TOPIC at MqConfig.BROKER_URL (see co.wethinkcode.logisticsconnect.mq.MqConfig)
