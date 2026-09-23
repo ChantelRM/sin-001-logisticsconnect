@@ -8,6 +8,9 @@ import java.util.*;
 import java.io.*;
 import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.core.type.TypeReference;
+import java.net.http.*;
+import java.net.URI;
+
 
 public class TransitServiceApp {
     private static final Map<String, Integer> updatedHubStages = new ConcurrentHashMap<>();
@@ -34,7 +37,7 @@ public class TransitServiceApp {
                             String id= (String) parsed.get("hubId");
                             Integer stage =(Integer) parsed.get("stage");
 
-                            updatedHubStages.put(id,stage)
+                            updatedHubStages.put(id,stage);
 
                         }
                     } catch(Exception e) {
@@ -66,7 +69,7 @@ public class TransitServiceApp {
         Javalin app = Javalin.create().start(7053);
 
         app.get("/health", ctx -> ctx.result("OK"));
-        app.get("/eta/hubId" , ctx -> {
+        app.get("/eta/{hubId}" , ctx -> {
             String id = ctx.pathParam("hubId");
             Map<String,Object> hub = fetchHub(id);
 
@@ -80,13 +83,13 @@ public class TransitServiceApp {
             int eta= baseEtaHours + (stage * delay);
 
             // TO-DO: BUILD RESPONSE
+            Map<String,Object> response = new LinkedHashMap<>();
+            response.put("hubId",id);
+            response.put("province", hub.get("province"));
+            response.put("stage",stage);
+            response.put("estimatedArrivalHours", eta);
             ctx.json(response);
         });
-        app.get("eta/hubs", ctx -> ctx.json(hubs));
-
-        // TODO (Calculates estimated arrival windows based on hub and delay stage.)
-        // Add domain endpoints for transit-service here.
     }
 }
 
-// MQ TODO: subscribes to ActiveMQ topic MqConfig.TOPIC at MqConfig.BROKER_URL (see co.wethinkcode.logisticsconnect.mq.MqConfig)
