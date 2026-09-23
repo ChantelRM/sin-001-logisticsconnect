@@ -61,7 +61,8 @@ public class TransitServiceApp {
         }
 
         ObjectMapper mapper = new ObjectMapper();
-        return mapper.readValue(response.body(), new TypeReference<Map<String,Object>>() {});
+        return mapper.readValue(response.body(),
+                new TypeReference<Map<String,Object>>() {});
     }
 
     public static void main(String[] args) throws IOException, JMSException{
